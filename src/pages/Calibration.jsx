@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import {
   FlaskConical, CheckCircle, Eye,
-  Download, Trash2, Search,
+  Download, Trash2, Search, CalendarDays, Clock3,
 } from 'lucide-react'
 import { sensors } from '../data/mockData'
 import { PageHeader } from '../components/ui'
@@ -10,11 +10,11 @@ import clsx from 'clsx'
 
 // ─── Parser types ─────────────────────────────────────────────────────────────
 const PARSER_TYPES = [
-  { value: 'accumac_txt',  label: 'AccuMac (TXT)' },
+  { value: 'accumac_txt', label: 'AccuMac (TXT)' },
   { value: 'rotronic_xls', label: 'Rotronic (XLS)' },
-  { value: 'testo_csv',    label: 'Testo (CSV)' },
-  { value: 'generic_csv',  label: 'Generic CSV' },
-  { value: 'fluke_txt',    label: 'Fluke (TXT)' },
+  { value: 'testo_csv', label: 'Testo (CSV)' },
+  { value: 'generic_csv', label: 'Generic CSV' },
+  { value: 'fluke_txt', label: 'Fluke (TXT)' },
 ]
 
 // ─── Real file parser ─────────────────────────────────────────────────────────
@@ -49,6 +49,29 @@ function parseFileContent(text, fileName) {
   const dataChannels = channels.filter(ch => !/^(time|date|timestamp)$/i.test(ch))
 
   return { channels: dataChannels, dataPoints: dataLines.length, fileName }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function normalizeTimeInput(value) {
+  let v = value.toLowerCase().replace(/[^0-9apm:\s]/g, '').trim()
+
+  // 1, 12, 1230, 1230p, 12:30 pm, etc.
+  const match = v.match(/^(\d{1,2})(?::?(\d{0,2}))?\s*(a|am|p|pm)?$/)
+  if (!match) return value
+
+  let [, hh, mm = '', suffix = ''] = match
+  let hour = parseInt(hh || '12', 10)
+
+  if (Number.isNaN(hour)) return value
+  hour = Math.min(Math.max(hour, 1), 12)
+
+  if (mm.length > 2) mm = mm.slice(0, 2)
+  if (mm.length === 0) mm = '00'
+
+  if (suffix === 'a') suffix = 'am'
+  if (suffix === 'p') suffix = 'pm'
+
+  return `${hour}:${mm}${suffix ? ` ${suffix}` : ''}`
 }
 
 // ─── All sensors flat list ────────────────────────────────────────────────────
@@ -97,24 +120,55 @@ function AlertModal({ message, onClose }) {
   )
 }
 
+// ─── Date Input with white custom icon ───────────────────────────────────────
+function DateField({ value, onChange }) {
+  return (
+    <div className="relative">
+      <input
+        type="date"
+        className="input pr-10 w-full"
+        value={value}
+        onChange={onChange}
+      />
+      <CalendarDays
+        size={16}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/90 pointer-events-none"
+      />
+    </div>
+  )
+}
+
+// ─── Time Text Input ──────────────────────────────────────────────────────────
+function TimeField({ value, onChange, placeholder }) {
+  return (
+    <input
+      type="text"
+      className="input w-full font-mono"
+      placeholder={placeholder}
+      value={value}
+      onChange={e => onChange(normalizeTimeInput(e.target.value))}
+    />
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Calibration() {
-  const [sessionName,     setSessionName]     = useState('')
-  const [deviceSearch,    setDeviceSearch]    = useState('')
+  const [sessionName, setSessionName] = useState('')
+  const [deviceSearch, setDeviceSearch] = useState('')
   const [selectedDevices, setSelectedDevices] = useState([])
-  const [dateFrom,        setDateFrom]        = useState('')
-  const [timeFrom,        setTimeFrom]        = useState('')
-  const [dateTo,          setDateTo]          = useState('')
-  const [timeTo,          setTimeTo]          = useState('')
-  const [parameters,      setParameters]      = useState('temperature')
-  const [refSource,       setRefSource]       = useState('file')
-  const [parserType,      setParserType]      = useState('accumac_txt')
-  const [parsedFile,      setParsedFile]      = useState(null)
-  const [tempChannel,     setTempChannel]     = useState('')
-  const [humidChannel,    setHumidChannel]    = useState('')
-  const [notes,           setNotes]           = useState('')
-  const [alertMsg,        setAlertMsg]        = useState('')
-  const [sessions,        setSessions]        = useState(INITIAL_SESSIONS)
+  const [dateFrom, setDateFrom] = useState('')
+  const [timeFrom, setTimeFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [timeTo, setTimeTo] = useState('')
+  const [parameters, setParameters] = useState('temperature')
+  const [refSource, setRefSource] = useState('file')
+  const [parserType, setParserType] = useState('accumac_txt')
+  const [parsedFile, setParsedFile] = useState(null)
+  const [tempChannel, setTempChannel] = useState('')
+  const [humidChannel, setHumidChannel] = useState('')
+  const [notes, setNotes] = useState('')
+  const [alertMsg, setAlertMsg] = useState('')
+  const [sessions, setSessions] = useState(INITIAL_SESSIONS)
   const fileInputRef = useRef()
 
   const filteredDevices = allSensors.filter(s =>
@@ -136,7 +190,7 @@ export default function Calibration() {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (evt) => {
+    reader.onload = evt => {
       const result = parseFileContent(evt.target.result, file.name)
       setParsedFile(result)
       setTempChannel('')
@@ -149,15 +203,24 @@ export default function Calibration() {
   }
 
   function handleCreate() {
-    if (!sessionName.trim()) { setAlertMsg('Please enter a session name.'); return }
-    if (selectedDevices.length === 0) { setAlertMsg('Please select at least one device.'); return }
+    if (!sessionName.trim()) {
+      setAlertMsg('Please enter a session name.')
+      return
+    }
+    if (selectedDevices.length === 0) {
+      setAlertMsg('Please select at least one device.')
+      return
+    }
 
     const paramLabel =
-      parameters === 'temperature' ? 'Temperature' :
-      parameters === 'humidity'    ? 'Humidity'    : 'Both'
+      parameters === 'temperature'
+        ? 'Temperature'
+        : parameters === 'humidity'
+          ? 'Humidity'
+          : 'Both'
 
-    const fromStr = dateFrom ? `${dateFrom}T${timeFrom || '00:00'}` : new Date().toISOString()
-    const toStr   = dateTo   ? `${dateTo}T${timeTo || '00:00'}`     : new Date().toISOString()
+    const fromStr = dateFrom ? `${dateFrom}T${timeFrom || '12:00 am'}` : new Date().toISOString()
+    const toStr = dateTo ? `${dateTo}T${timeTo || '11:59 pm'}` : new Date().toISOString()
 
     const newSession = {
       id: `cal_${Date.now()}`,
@@ -175,7 +238,6 @@ export default function Calibration() {
     setSessions(prev => [newSession, ...prev])
     setAlertMsg(`Calibration session "${newSession.name}" created successfully!`)
 
-    // Reset form
     setSessionName('')
     setSelectedDevices([])
     setDateFrom('')
@@ -192,8 +254,8 @@ export default function Calibration() {
     setSessions(prev => prev.filter(s => s.id !== id))
   }
 
-  const showTempChannel  = parameters === 'temperature' || parameters === 'both'
-  const showHumidChannel = parameters === 'humidity'    || parameters === 'both'
+  const showTempChannel = parameters === 'temperature' || parameters === 'both'
+  const showHumidChannel = parameters === 'humidity' || parameters === 'both'
 
   return (
     <div className="space-y-6">
@@ -202,9 +264,10 @@ export default function Calibration() {
         subtitle="Create calibration sessions and compare sensor readings against reference standards"
       />
 
-      {/* ── Create New Session Form ── */}
       <div className="card p-6 space-y-6">
-        <h2 className="font-display text-lg font-700 text-slate-100">Create New Calibration Session</h2>
+        <h2 className="font-display text-lg font-700 text-slate-100">
+          Create New Calibration Session
+        </h2>
 
         {/* Session name */}
         <div>
@@ -223,7 +286,9 @@ export default function Calibration() {
         <div className="card-inner p-4 space-y-3">
           <div>
             <p className="text-sm font-medium text-slate-200">Select IoT Devices to Calibrate</p>
-            <p className="text-xs text-slate-500 mt-0.5">Choose the devices you want to calibrate against the reference standard</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Choose the devices you want to calibrate against the reference standard
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -273,49 +338,27 @@ export default function Calibration() {
             <label className="text-xs text-slate-400 uppercase tracking-wider font-medium block mb-2">
               Select Date and Time Range
             </label>
+
             <div className="grid grid-cols-2 gap-4">
               {/* From */}
               <div className="flex flex-col gap-1.5">
                 <p className="text-xs text-slate-500">From</p>
-                <input
-                  type="date"
-                  className="input"
-                  value={dateFrom}
-                  onChange={e => setDateFrom(e.target.value)}
-                />
-                <input
-                  type="text"
-                  className="input font-mono"
-                  placeholder="HH:MM"
-                  maxLength={5}
+                <DateField value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                <TimeField
                   value={timeFrom}
-                  onChange={e => {
-                    let v = e.target.value.replace(/[^0-9:]/g, '')
-                    if (v.length === 2 && !v.includes(':')) v = v + ':'
-                    setTimeFrom(v)
-                  }}
+                  onChange={setTimeFrom}
+                  placeholder="12:00 am"
                 />
               </div>
+
               {/* To */}
               <div className="flex flex-col gap-1.5">
                 <p className="text-xs text-slate-500">To</p>
-                <input
-                  type="date"
-                  className="input"
-                  value={dateTo}
-                  onChange={e => setDateTo(e.target.value)}
-                />
-                <input
-                  type="text"
-                  className="input font-mono"
-                  placeholder="HH:MM"
-                  maxLength={5}
+                <DateField value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                <TimeField
                   value={timeTo}
-                  onChange={e => {
-                    let v = e.target.value.replace(/[^0-9:]/g, '')
-                    if (v.length === 2 && !v.includes(':')) v = v + ':'
-                    setTimeTo(v)
-                  }}
+                  onChange={setTimeTo}
+                  placeholder="11:59 pm"
                 />
               </div>
             </div>
@@ -328,8 +371,8 @@ export default function Calibration() {
           <div className="flex flex-col gap-2">
             {[
               { value: 'temperature', label: 'Temperature Only' },
-              { value: 'humidity',    label: 'Humidity Only' },
-              { value: 'both',        label: 'Both Temperature & Humidity' },
+              { value: 'humidity', label: 'Humidity Only' },
+              { value: 'both', label: 'Both Temperature & Humidity' },
             ].map(opt => (
               <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer">
                 <input
@@ -351,7 +394,7 @@ export default function Calibration() {
             <p className="text-sm font-medium text-slate-200 mb-2">Reference Standard Source</p>
             <div className="flex flex-col gap-2">
               {[
-                { value: 'file',        label: 'Upload Reference Standard File' },
+                { value: 'file', label: 'Upload Reference Standard File' },
                 { value: 'thingsboard', label: 'Use ThingsBoard Device' },
               ].map(opt => (
                 <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer">
@@ -377,7 +420,10 @@ export default function Calibration() {
                 <select
                   className="select w-full"
                   value={parserType}
-                  onChange={e => { setParserType(e.target.value); setParsedFile(null) }}
+                  onChange={e => {
+                    setParserType(e.target.value)
+                    setParsedFile(null)
+                  }}
                 >
                   {PARSER_TYPES.map(p => (
                     <option key={p.value} value={p.value}>{p.label}</option>
@@ -408,9 +454,15 @@ export default function Calibration() {
 
               {parsedFile && (
                 <div className="bg-surface-700 border border-surface-400 rounded-lg p-3 text-xs font-mono space-y-1">
-                  <p className="text-slate-300">File: <span className="text-slate-100">{parsedFile.fileName}</span></p>
-                  <p className="text-slate-300">Data points: <span className="text-slate-100">{parsedFile.dataPoints}</span></p>
-                  <p className="text-slate-300">Channels: <span className="text-slate-100">{parsedFile.channels.join(', ')}</span></p>
+                  <p className="text-slate-300">
+                    File: <span className="text-slate-100">{parsedFile.fileName}</span>
+                  </p>
+                  <p className="text-slate-300">
+                    Data points: <span className="text-slate-100">{parsedFile.dataPoints}</span>
+                  </p>
+                  <p className="text-slate-300">
+                    Channels: <span className="text-slate-100">{parsedFile.channels.join(', ')}</span>
+                  </p>
                 </div>
               )}
             </>
@@ -480,7 +532,7 @@ export default function Calibration() {
         </button>
       </div>
 
-      {/* ── Sessions Table ── */}
+      {/* Sessions Table */}
       <div className="card overflow-hidden">
         <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between">
           <h2 className="font-display text-sm font-700 uppercase tracking-widest text-slate-300">
@@ -494,7 +546,10 @@ export default function Calibration() {
             <thead>
               <tr className="border-b border-surface-500">
                 {['Name', 'Devices', 'Time Period', 'Parameters', 'Reference', 'Stable Periods', 'Actions'].map(h => (
-                  <th key={h} className="px-5 py-3 text-left text-xs text-slate-500 font-medium uppercase tracking-wider whitespace-nowrap">
+                  <th
+                    key={h}
+                    className="px-5 py-3 text-left text-xs text-slate-500 font-medium uppercase tracking-wider whitespace-nowrap"
+                  >
                     {h}
                   </th>
                 ))}
@@ -521,9 +576,13 @@ export default function Calibration() {
                         </span>
                       </td>
                       <td className="px-5 py-4 text-xs text-slate-400 font-mono whitespace-nowrap">
-                        <div>{sess.timePeriod.from ? format(new Date(sess.timePeriod.from), 'MMM d, yyyy HH:mm') : '—'}</div>
+                        <div>
+                          {sess.timePeriod.from ? format(new Date(sess.timePeriod.from), 'MMM d, yyyy HH:mm') : '—'}
+                        </div>
                         <div className="text-slate-600">to</div>
-                        <div>{sess.timePeriod.to ? format(new Date(sess.timePeriod.to), 'MMM d, yyyy HH:mm') : '—'}</div>
+                        <div>
+                          {sess.timePeriod.to ? format(new Date(sess.timePeriod.to), 'MMM d, yyyy HH:mm') : '—'}
+                        </div>
                       </td>
                       <td className="px-5 py-4">
                         <span className="badge bg-surface-600 text-slate-300 border border-surface-400 text-xs">
@@ -539,12 +598,14 @@ export default function Calibration() {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <span className={clsx(
-                          'badge text-xs',
-                          sess.stablePeriods > 0
-                            ? 'bg-brand-500/15 text-brand-400 border border-brand-500/30'
-                            : 'bg-surface-600 text-slate-500 border border-surface-400'
-                        )}>
+                        <span
+                          className={clsx(
+                            'badge text-xs',
+                            sess.stablePeriods > 0
+                              ? 'bg-brand-500/15 text-brand-400 border border-brand-500/30'
+                              : 'bg-surface-600 text-slate-500 border border-surface-400'
+                          )}
+                        >
                           {sess.stablePeriods} period{sess.stablePeriods !== 1 ? 's' : ''}
                         </span>
                       </td>
@@ -560,8 +621,7 @@ export default function Calibration() {
                           </button>
                           <button
                             onClick={() => handleDelete(sess.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                                       text-red-400 border border-red-900/40 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 border border-red-900/40 bg-red-500/10 hover:bg-red-500/20 transition-colors"
                           >
                             <Trash2 size={12} />
                             Delete
