@@ -1,31 +1,38 @@
 import React, { useState } from 'react'
-import {
-  FileText, Download, Table2, FileSpreadsheet, Calendar,
-  ChevronDown, Filter, BarChart2, Clock,
-} from 'lucide-react'
+import { FileText, Download, BarChart2 } from 'lucide-react'
 import { customers, deployments, sensors } from '../data/mockData'
 import { PageHeader, StatusBadge } from '../components/ui'
+import { useRole } from '../context/RoleContext'
 import { format, subDays } from 'date-fns'
 import clsx from 'clsx'
 
 const REPORT_TYPES = [
-  { id: 'temperature',  label: 'Temperature Only',          icon: BarChart2,  desc: 'Temperature readings with min/max/avg summaries' },
-  { id: 'humidity',     label: 'Humidity Only',             icon: BarChart2,  desc: 'Humidity readings with min/max/avg summaries' },
-  { id: 'temp_humid',   label: 'Temperature & Humidity',    icon: BarChart2,  desc: 'Combined temperature and humidity report' },
+  { id: 'temperature', label: 'Temperature Only',       desc: 'Temperature readings with min/max/avg summaries' },
+  { id: 'humidity',    label: 'Humidity Only',          desc: 'Humidity readings with min/max/avg summaries' },
+  { id: 'temp_humid',  label: 'Temperature & Humidity', desc: 'Combined temperature and humidity report' },
 ]
 
 const FORMAT_OPTIONS = ['CSV', 'XLSX', 'PDF']
 
 export default function Reports() {
-  const [selectedCustomer, setSelectedCustomer]   = useState('')
-  const [selectedDeployment, setSelectedDeployment] = useState('')
-  const [selectedSensors, setSelectedSensors]     = useState([])
-  const [reportType, setReportType]               = useState('temperature')
-  const [exportFormat, setExportFormat]           = useState('CSV')
-  const [dateFrom, setDateFrom]                   = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'))
-  const [dateTo, setDateTo]                       = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [generating, setGenerating]               = useState(false)
-  const [generated, setGenerated]                 = useState(false)
+  const { role } = useRole()
+
+  // Pharma: pre-scope to their customer; admin/eng: open selection
+  const defaultCustomer = role.key === 'pharma' ? role.features.pharmaCustomerId : ''
+
+  const [selectedCustomer,    setSelectedCustomer]    = useState(defaultCustomer)
+  const [selectedDeployment,  setSelectedDeployment]  = useState('')
+  const [selectedSensors,     setSelectedSensors]     = useState([])
+  const [reportType,          setReportType]          = useState('temperature')
+  const [exportFormat,        setExportFormat]        = useState('CSV')
+  const [dateFrom,            setDateFrom]            = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'))
+  const [dateTo,              setDateTo]              = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [generating,          setGenerating]          = useState(false)
+  const [generated,           setGenerated]           = useState(false)
+
+  const availableCustomers = role.key === 'pharma'
+    ? customers.filter(c => c.id === role.features.pharmaCustomerId)
+    : customers
 
   const filteredDeployments = selectedCustomer
     ? Object.values(deployments).filter(d => d.customerId === selectedCustomer)
@@ -37,14 +44,14 @@ export default function Reports() {
 
   function toggleSensor(id) {
     setSelectedSensors(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id],
     )
   }
 
   function handleGenerate() {
     setGenerating(true)
     setGenerated(false)
-    setTimeout(() => { setGenerating(false); setGenerated(true) }, 1600)
+    setTimeout(() => { setGenerating(false); setGenerated(true) }, 1400)
   }
 
   const selectedReportType = REPORT_TYPES.find(r => r.id === reportType)
@@ -54,82 +61,97 @@ export default function Reports() {
     <div className="space-y-6">
       <PageHeader
         title="Reports"
-        subtitle="Generate and export telemetry reports for deployments and sensors"
+        subtitle={
+          role.key === 'pharma'
+            ? 'Export temperature and humidity data for your sites'
+            : 'Generate and export telemetry reports for deployments and sensors'
+        }
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        {/* Filters panel */}
+        {/* Config panel */}
         <div className="xl:col-span-1 flex flex-col gap-4">
           <div className="card p-5">
-            <h3 className="font-display text-xs font-700 uppercase tracking-widest text-slate-400 mb-4">
-              Report Configuration
-            </h3>
+            <h3 className="section-header mb-4">Report Configuration</h3>
 
             {/* Report type */}
             <div className="mb-4">
-              <label className="text-xs text-slate-500 uppercase tracking-wider block mb-2">Report Type</label>
+              <label className="text-xs text-surface-500 uppercase tracking-wider block mb-2 font-medium">
+                Report Type
+              </label>
               <div className="space-y-1.5">
-                {REPORT_TYPES.map(rt => {
-                  const Icon = rt.icon
-                  return (
-                    <button
-                      key={rt.id}
-                      onClick={() => setReportType(rt.id)}
-                      className={clsx(
-                        'w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all',
-                        reportType === rt.id
-                          ? 'bg-brand-500/15 border border-brand-500/40 text-brand-400'
-                          : 'hover:bg-surface-600 text-slate-400 border border-transparent'
-                      )}
-                    >
-                      <Icon size={14} className="mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-xs font-medium">{rt.label}</p>
-                        <p className="text-xs opacity-60 mt-0.5 leading-relaxed">{rt.desc}</p>
-                      </div>
-                    </button>
-                  )
-                })}
+                {REPORT_TYPES.map(rt => (
+                  <button
+                    key={rt.id}
+                    onClick={() => setReportType(rt.id)}
+                    className={clsx(
+                      'w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all border',
+                      reportType === rt.id
+                        ? 'bg-brand-50 border-brand-200 text-brand-700'
+                        : 'hover:bg-surface-50 text-surface-600 border-transparent hover:border-surface-200',
+                    )}
+                  >
+                    <BarChart2 size={14} className="mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold">{rt.label}</p>
+                      <p className="text-xs opacity-60 mt-0.5 leading-relaxed">{rt.desc}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Customer filter */}
-            <div className="mb-3">
-              <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1.5">Customer</label>
-              <select
-                className="select w-full"
-                value={selectedCustomer}
-                onChange={e => { setSelectedCustomer(e.target.value); setSelectedDeployment(''); setSelectedSensors([]) }}
-              >
-                <option value="">All customers</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
+            {/* Customer — hidden for pharma (auto-scoped) */}
+            {role.key !== 'pharma' && (
+              <div className="mb-3">
+                <label className="text-xs text-surface-500 uppercase tracking-wider block mb-1.5 font-medium">
+                  Customer
+                </label>
+                <select
+                  className="select w-full"
+                  value={selectedCustomer}
+                  onChange={e => {
+                    setSelectedCustomer(e.target.value)
+                    setSelectedDeployment('')
+                    setSelectedSensors([])
+                  }}
+                >
+                  <option value="">All customers</option>
+                  {availableCustomers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            {/* Deployment filter */}
+            {/* Deployment */}
             <div className="mb-3">
-              <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1.5">Deployment</label>
+              <label className="text-xs text-surface-500 uppercase tracking-wider block mb-1.5 font-medium">
+                Deployment
+              </label>
               <select
                 className="select w-full"
                 value={selectedDeployment}
                 onChange={e => { setSelectedDeployment(e.target.value); setSelectedSensors([]) }}
               >
                 <option value="">All deployments</option>
-                {filteredDeployments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {filteredDeployments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
               </select>
             </div>
 
             {/* Sensor selection */}
             {filteredSensors.length > 0 && (
               <div className="mb-3">
-                <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1.5">
-                  Sensors <span className="text-slate-600">(optional)</span>
+                <label className="text-xs text-surface-500 uppercase tracking-wider block mb-1.5 font-medium">
+                  Sensors <span className="text-surface-400 normal-case">(optional)</span>
                 </label>
                 <div className="space-y-1">
                   {filteredSensors.map(s => (
                     <label
                       key={s.id}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-600 cursor-pointer"
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-50 cursor-pointer"
                     >
                       <input
                         type="checkbox"
@@ -137,7 +159,7 @@ export default function Reports() {
                         onChange={() => toggleSensor(s.id)}
                         className="accent-brand-500 w-3.5 h-3.5"
                       />
-                      <span className="text-xs text-slate-300">{s.name}</span>
+                      <span className="text-xs text-surface-700">{s.name}</span>
                       <StatusBadge status={s.status} />
                     </label>
                   ))}
@@ -147,42 +169,36 @@ export default function Reports() {
 
             {/* Date range */}
             <div className="mb-4">
-              <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1.5">Date Range</label>
+              <label className="text-xs text-surface-500 uppercase tracking-wider block mb-1.5 font-medium">
+                Date Range
+              </label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-xs text-slate-600 mb-1">From</p>
-                  <input
-                    type="date"
-                    className="input w-full text-xs"
-                    value={dateFrom}
-                    onChange={e => setDateFrom(e.target.value)}
-                  />
+                  <p className="text-xs text-surface-400 mb-1">From</p>
+                  <input type="date" className="input w-full text-xs" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-600 mb-1">To</p>
-                  <input
-                    type="date"
-                    className="input w-full text-xs"
-                    value={dateTo}
-                    onChange={e => setDateTo(e.target.value)}
-                  />
+                  <p className="text-xs text-surface-400 mb-1">To</p>
+                  <input type="date" className="input w-full text-xs" value={dateTo} onChange={e => setDateTo(e.target.value)} />
                 </div>
               </div>
             </div>
 
             {/* Export format */}
             <div className="mb-5">
-              <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1.5">Format</label>
+              <label className="text-xs text-surface-500 uppercase tracking-wider block mb-1.5 font-medium">
+                Format
+              </label>
               <div className="flex gap-2">
                 {FORMAT_OPTIONS.map(f => (
                   <button
                     key={f}
                     onClick={() => setExportFormat(f)}
                     className={clsx(
-                      'flex-1 py-1.5 rounded-lg text-xs font-medium transition-all border',
+                      'flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all border',
                       exportFormat === f
-                        ? 'bg-brand-500/20 text-brand-400 border-brand-500/40'
-                        : 'text-slate-500 border-surface-500 hover:border-surface-400 hover:text-slate-300'
+                        ? 'bg-brand-50 text-brand-700 border-brand-300'
+                        : 'text-surface-500 border-surface-300 hover:border-surface-400 hover:text-surface-700',
                     )}
                   >
                     {f}
@@ -198,7 +214,7 @@ export default function Reports() {
             >
               {generating ? (
                 <>
-                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                   Generating…
                 </>
               ) : (
@@ -215,62 +231,65 @@ export default function Reports() {
         <div className="xl:col-span-2 flex flex-col gap-4">
           {generated ? (
             <>
-              {/* Report preview card */}
               <div className="card">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200 bg-surface-50">
                   <div>
-                    <h3 className="font-display text-base font-700 text-slate-100">{selectedReportType?.label}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {selectedCustomer ? customers.find(c => c.id === selectedCustomer)?.name : 'All customers'} ·{' '}
-                      {dateFrom} to {dateTo} · {days} days
+                    <h3 className="font-display text-base font-bold text-surface-800">
+                      {selectedReportType?.label}
+                    </h3>
+                    <p className="text-xs text-surface-500 mt-0.5">
+                      {selectedCustomer
+                        ? customers.find(c => c.id === selectedCustomer)?.name
+                        : 'All customers'}{' '}
+                      · {dateFrom} to {dateTo} · {days} days
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button className="btn-ghost gap-2 text-xs">
-                      <Download size={13} /> Download {exportFormat}
-                    </button>
-                  </div>
+                  <button className="btn-ghost text-xs gap-2">
+                    <Download size={13} /> Download {exportFormat}
+                  </button>
                 </div>
 
-                {/* Mock preview table */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-surface-500">
+                      <tr className="border-b border-surface-200 bg-surface-50">
                         {['Timestamp', 'Sensor', 'Temp (°C)', 'Humidity (%)', 'Battery', 'Status'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-slate-500 font-medium uppercase tracking-wider">
+                          <th key={h} className="px-5 py-3 text-left text-surface-500 font-semibold uppercase tracking-wider">
                             {h}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-surface-600">
+                    <tbody className="divide-y divide-surface-100">
                       {[
-                        { ts: '2024-04-15 09:00', sensor: 'Fridge Unit A1', temp: 4.7, humid: 43.2, bat: 87, status: 'ok' },
-                        { ts: '2024-04-15 09:15', sensor: 'Fridge Unit A1', temp: 4.9, humid: 43.5, bat: 87, status: 'ok' },
-                        { ts: '2024-04-15 09:30', sensor: 'Fridge Unit A1', temp: 5.1, humid: 43.1, bat: 87, status: 'ok' },
+                        { ts: '2024-04-15 09:00', sensor: 'Fridge Unit A1',     temp: 4.7,  humid: 43.2, bat: 87, status: 'ok' },
+                        { ts: '2024-04-15 09:15', sensor: 'Fridge Unit A1',     temp: 4.9,  humid: 43.5, bat: 87, status: 'ok' },
+                        { ts: '2024-04-15 09:30', sensor: 'Fridge Unit A1',     temp: 5.1,  humid: 43.1, bat: 87, status: 'ok' },
                         { ts: '2024-04-15 09:00', sensor: 'Ambient Monitor B1', temp: 24.8, humid: 56.2, bat: 24, status: 'warn' },
                         { ts: '2024-04-15 09:15', sensor: 'Ambient Monitor B1', temp: 25.7, humid: 57.0, bat: 23, status: 'breach' },
                         { ts: '2024-04-15 09:30', sensor: 'Ambient Monitor B1', temp: 26.1, humid: 58.4, bat: 23, status: 'breach' },
                       ].map((row, i) => (
-                        <tr key={i} className={clsx('hover:bg-surface-700/30', row.status === 'breach' && 'bg-red-500/5')}>
-                          <td className="px-5 py-2.5 font-mono text-slate-400">{row.ts}</td>
-                          <td className="px-5 py-2.5 text-slate-300">{row.sensor}</td>
+                        <tr key={i} className={clsx(
+                          'hover:bg-surface-50',
+                          row.status === 'breach' && 'bg-red-50/60',
+                        )}>
+                          <td className="px-5 py-2.5 font-mono text-surface-500">{row.ts}</td>
+                          <td className="px-5 py-2.5 text-surface-700">{row.sensor}</td>
                           <td className={clsx(
-                            'px-5 py-2.5 font-mono font-medium',
-                            row.status === 'breach' ? 'text-red-400' :
-                            row.status === 'warn'   ? 'text-amber-400' : 'text-slate-200'
+                            'px-5 py-2.5 font-mono font-semibold',
+                            row.status === 'breach' ? 'text-red-600' :
+                            row.status === 'warn'   ? 'text-amber-600' : 'text-surface-800',
                           )}>
                             {row.temp}
                           </td>
-                          <td className="px-5 py-2.5 font-mono text-slate-300">{row.humid}</td>
-                          <td className="px-5 py-2.5 font-mono text-slate-400">{row.bat}%</td>
+                          <td className="px-5 py-2.5 font-mono text-surface-600">{row.humid}</td>
+                          <td className="px-5 py-2.5 font-mono text-surface-500">{row.bat}%</td>
                           <td className="px-5 py-2.5">
                             <span className={clsx(
                               'badge',
-                              row.status === 'breach' ? 'bg-red-500/15 text-red-400 border border-red-500/30' :
-                              row.status === 'warn'   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' :
-                              'bg-brand-500/15 text-brand-400 border border-brand-500/30'
+                              row.status === 'breach' ? 'bg-red-50 text-red-700 border border-red-200' :
+                              row.status === 'warn'   ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                              'bg-brand-50 text-brand-700 border border-brand-200',
                             )}>
                               {row.status === 'ok' ? 'In range' : row.status === 'warn' ? 'Warning' : 'Breach'}
                             </span>
@@ -281,40 +300,38 @@ export default function Reports() {
                   </table>
                 </div>
 
-                <div className="px-5 py-3 border-t border-surface-500 flex items-center justify-between">
-                  <span className="text-xs text-slate-500">Showing 6 of 1,248 rows (preview)</span>
+                <div className="px-5 py-3 border-t border-surface-200 bg-surface-50 flex items-center justify-between">
+                  <span className="text-xs text-surface-400">Showing 6 of 1,248 rows (preview)</span>
                   <button className="btn-ghost text-xs">
-                    <Download size={12} />
-                    Export full dataset
+                    <Download size={12} /> Export full dataset
                   </button>
                 </div>
               </div>
 
-              {/* Summary cards */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="card p-4 text-center">
-                  <div className="text-2xl font-display font-700 text-slate-100 mb-1">1,248</div>
-                  <div className="text-xs text-slate-500">Total records</div>
-                </div>
-                <div className="card p-4 text-center">
-                  <div className="text-2xl font-display font-700 text-amber-400 mb-1">3</div>
-                  <div className="text-xs text-slate-500">Excursion events</div>
-                </div>
-                <div className="card p-4 text-center">
-                  <div className="text-2xl font-display font-700 text-brand-400 mb-1">98.8%</div>
-                  <div className="text-xs text-slate-500">In-range readings</div>
-                </div>
+                {[
+                  { value: '1,248', label: 'Total records',     cls: 'text-surface-800' },
+                  { value: '3',     label: 'Excursion events',  cls: 'text-amber-600' },
+                  { value: '98.8%', label: 'In-range readings', cls: 'text-brand-600' },
+                ].map(s => (
+                  <div key={s.label} className="card p-4 text-center">
+                    <div className={clsx('text-2xl font-display font-bold mb-1', s.cls)}>{s.value}</div>
+                    <div className="text-xs text-surface-500">{s.label}</div>
+                  </div>
+                ))}
               </div>
             </>
           ) : (
-            /* Empty state */
             <div className="card flex flex-col items-center justify-center py-24 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-surface-700 flex items-center justify-center mb-4 border border-surface-500">
-                <FileText size={28} className="text-slate-500" />
+              <div className="w-16 h-16 rounded-2xl bg-surface-100 flex items-center justify-center mb-4 border border-surface-200">
+                <FileText size={28} className="text-surface-400" />
               </div>
-              <h3 className="font-display text-base font-700 text-slate-300 mb-2">No report generated yet</h3>
-              <p className="text-sm text-slate-500 max-w-xs">
-                Configure filters and click <span className="text-brand-400">Generate Report</span> to preview and export data.
+              <h3 className="font-display text-base font-bold text-surface-700 mb-2">
+                No report generated yet
+              </h3>
+              <p className="text-sm text-surface-400 max-w-xs">
+                Configure filters and click{' '}
+                <span className="text-brand-600 font-medium">Generate Report</span> to preview and export data.
               </p>
             </div>
           )}
