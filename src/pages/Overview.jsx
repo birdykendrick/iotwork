@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, Layers, Radio, WifiOff, AlertTriangle,
   ChevronRight, Thermometer, Droplets, Activity,
-  MapPin, Building2,
+  MapPin, Building2, Settings,
 } from 'lucide-react'
 import {
   customers, deployments, sensors, alerts,
@@ -13,6 +13,7 @@ import { PageHeader, StatusBadge, SeverityBadge, AlertTypeBadge } from '../compo
 import { useRole } from '../context/RoleContext'
 import { formatDistanceToNow } from 'date-fns'
 import clsx from 'clsx'
+import PharmaSiteManager from './PharmaSiteManager'
 
 // ─── Shared: deployment row used in both views ────────────────────────────────
 function DeploymentRow({ dep, navigate }) {
@@ -183,9 +184,9 @@ function AdminOverview({ navigate }) {
   )
 }
 
-// ─── Pharma "My Sites" view ───────────────────────────────────────────────────
-// Scoped to Haleon (c001). Clean, site-focused, no internal admin info.
+// ─── Pharma view — tabs: Live Status | Site Configuration ────────────────────
 function PharmaOverview({ navigate, pharmaCustomerId }) {
+  const [tab, setTab] = useState('status')
   const cust        = customers.find(c => c.id === pharmaCustomerId)
   const custDeps    = (cust?.deploymentIds || []).map(id => deployments[id])
   const sensorList  = custDeps.flatMap(d => d.sensorIds.map(sid => sensors[sid]))
@@ -195,207 +196,182 @@ function PharmaOverview({ navigate, pharmaCustomerId }) {
   const myAlerts    = alerts.filter(a => a.customerId === pharmaCustomerId && !a.resolved)
 
   return (
-    <div className="space-y-6">
-      {/* Welcoming header for pharma user */}
+    <div className="space-y-5">
+      {/* Page header */}
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs text-surface-400 uppercase tracking-wider font-medium mb-1">
-            {cust?.name}
-          </p>
+          <p className="text-xs text-surface-400 uppercase tracking-wider font-medium mb-1">{cust?.name}</p>
           <h1 className="font-display text-2xl font-bold text-surface-800">My Sites</h1>
-          <p className="text-sm text-surface-500 mt-1">
-            Live status across your monitored locations
-          </p>
+          <p className="text-sm text-surface-500 mt-1">Live status and configuration for your monitored locations</p>
         </div>
-        <div className="flex items-center gap-2">
-          {myAlerts.length > 0 && (
-            <span
-              className="badge bg-red-50 text-red-600 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
-              onClick={() => navigate('/alerts')}
-            >
-              <AlertTriangle size={11} />
-              {myAlerts.length} active alert{myAlerts.length !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
+        {myAlerts.length > 0 && (
+          <span
+            className="badge bg-red-50 text-red-600 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
+            onClick={() => navigate('/alerts')}
+          >
+            <AlertTriangle size={11} />
+            {myAlerts.length} active alert{myAlerts.length !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
-      {/* Status summary — 3 simple counts, pharma-friendly */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
-              <Radio size={18} className="text-brand-600" />
-            </div>
-            <div>
-              <div className="text-2xl font-display font-bold text-brand-700">{onlineCount}</div>
-              <div className="text-xs text-surface-500">Sensors Online</div>
-            </div>
-          </div>
-        </div>
-        <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <div className={clsx(
-              'w-10 h-10 rounded-xl flex items-center justify-center',
-              warnCount > 0 ? 'bg-amber-50' : 'bg-surface-100',
-            )}>
-              <AlertTriangle size={18} className={warnCount > 0 ? 'text-amber-500' : 'text-surface-400'} />
-            </div>
-            <div>
-              <div className={clsx(
-                'text-2xl font-display font-bold',
-                warnCount > 0 ? 'text-amber-700' : 'text-surface-400',
-              )}>
-                {warnCount}
-              </div>
-              <div className="text-xs text-surface-500">In Warning</div>
-            </div>
-          </div>
-        </div>
-        <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <div className={clsx(
-              'w-10 h-10 rounded-xl flex items-center justify-center',
-              offlineCount > 0 ? 'bg-red-50' : 'bg-surface-100',
-            )}>
-              <WifiOff size={18} className={offlineCount > 0 ? 'text-red-500' : 'text-surface-400'} />
-            </div>
-            <div>
-              <div className={clsx(
-                'text-2xl font-display font-bold',
-                offlineCount > 0 ? 'text-red-700' : 'text-surface-400',
-              )}>
-                {offlineCount}
-              </div>
-              <div className="text-xs text-surface-500">Offline</div>
-            </div>
-          </div>
-        </div>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 bg-surface-100 rounded-xl p-1 border border-surface-200 w-fit">
+        {[
+          { key: 'status', label: 'Live Status',     icon: Radio },
+          { key: 'config', label: 'Site Configuration', icon: Settings },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+              tab === t.key
+                ? 'bg-white text-surface-800 shadow-sm border border-surface-200'
+                : 'text-surface-500 hover:text-surface-700',
+            )}
+          >
+            <t.icon size={14} />
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Deployments — card grid rather than table, more user-friendly */}
-      <div>
-        <h2 className="section-header mb-3">Your Deployments</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {custDeps.map(dep => {
-            const depSensors  = dep.sensorIds.map(id => sensors[id])
-            const depOnline   = depSensors.filter(s => s.status === 'online').length
-            const depWarn     = depSensors.filter(s => s.status === 'warning').length
-            const depOffline  = depSensors.filter(s => s.status === 'offline').length
-            const depAlerts   = alerts.filter(a => a.deploymentId === dep.id && !a.resolved)
-            // Sample the first sensor's latest reading for the card
-            const firstSensor = depSensors.find(s => s.latestReading?.temperature != null)
-
-            return (
-              <div
-                key={dep.id}
-                className="card p-5 cursor-pointer hover:border-brand-300 hover:shadow-card-md transition-all"
-                onClick={() => navigate(`/deployments/${dep.id}`)}
-              >
-                {/* Top row */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={clsx(
-                      'w-2 h-10 rounded-full flex-shrink-0',
-                      dep.status === 'online'   ? 'bg-brand-500' :
-                      dep.status === 'warning'  ? 'bg-amber-400' :
-                      dep.status === 'critical' ? 'bg-red-500'   : 'bg-surface-300',
-                    )} />
-                    <div>
-                      <h3 className="text-sm font-semibold text-surface-800">{dep.name}</h3>
-                      <div className="flex items-center gap-1.5 text-xs text-surface-400 mt-0.5">
-                        <MapPin size={10} />
-                        {dep.location.split('—')[1]?.trim() || dep.location}
-                      </div>
-                    </div>
+      {tab === 'status' && (
+        <div className="space-y-5 animate-fade-in">
+          {/* KPI strip */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { icon: Radio,         label: 'Sensors Online', value: onlineCount, cls: 'text-brand-700',  bg: 'bg-brand-50',  iconCls: 'text-brand-600' },
+              { icon: AlertTriangle, label: 'In Warning',     value: warnCount,   cls: warnCount > 0 ? 'text-amber-700' : 'text-surface-400',  bg: warnCount > 0 ? 'bg-amber-50' : 'bg-surface-100', iconCls: warnCount > 0 ? 'text-amber-500' : 'text-surface-400' },
+              { icon: WifiOff,       label: 'Offline',        value: offlineCount, cls: offlineCount > 0 ? 'text-red-700' : 'text-surface-400', bg: offlineCount > 0 ? 'bg-red-50' : 'bg-surface-100', iconCls: offlineCount > 0 ? 'text-red-500' : 'text-surface-400' },
+            ].map(s => (
+              <div key={s.label} className="card p-5">
+                <div className="flex items-center gap-3">
+                  <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', s.bg)}>
+                    <s.icon size={18} className={s.iconCls} />
                   </div>
-                  <StatusBadge status={dep.status} />
-                </div>
-
-                {/* Live readings if available */}
-                {firstSensor && (
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="flex items-center gap-1.5 card-inner px-3 py-2 flex-1">
-                      <Thermometer size={13} className="text-brand-500" />
-                      <span className="text-sm font-mono font-semibold text-surface-800">
-                        {firstSensor.latestReading.temperature}°C
-                      </span>
-                      <span className="text-xs text-surface-400 ml-auto">temp</span>
-                    </div>
-                    {firstSensor.latestReading.humidity != null && (
-                      <div className="flex items-center gap-1.5 card-inner px-3 py-2 flex-1">
-                        <Droplets size={13} className="text-sky-500" />
-                        <span className="text-sm font-mono font-semibold text-surface-800">
-                          {firstSensor.latestReading.humidity}%
-                        </span>
-                        <span className="text-xs text-surface-400 ml-auto">humidity</span>
-                      </div>
-                    )}
+                  <div>
+                    <div className={clsx('text-2xl font-display font-bold', s.cls)}>{s.value}</div>
+                    <div className="text-xs text-surface-500">{s.label}</div>
                   </div>
-                )}
-
-                {/* Footer */}
-                <div className="flex items-center justify-between text-xs text-surface-400">
-                  <span>{depSensors.length} sensor{depSensors.length !== 1 ? 's' : ''}</span>
-                  <div className="flex items-center gap-3">
-                    {depOffline > 0 && <span className="text-red-600">{depOffline} offline</span>}
-                    {depWarn > 0 && <span className="text-amber-600">{depWarn} warning</span>}
-                    {depAlerts.length > 0 && (
-                      <span className="badge bg-red-50 text-red-600 border border-red-200">
-                        {depAlerts.length} alert{depAlerts.length > 1 ? 's' : ''}
-                      </span>
-                    )}
-                    <ChevronRight size={13} className="text-surface-300" />
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Active alerts for this customer */}
-      {myAlerts.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="section-header">Active Alerts</h2>
-            <button
-              className="text-xs text-brand-600 hover:text-brand-700 font-medium transition-colors"
-              onClick={() => navigate('/alerts')}
-            >
-              View all →
-            </button>
-          </div>
-          <div className="card divide-y divide-surface-100">
-            {myAlerts.slice(0, 4).map(alert => (
-              <div key={alert.id} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-50 transition-colors">
-                <div className={clsx(
-                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5',
-                  alert.severity === 'critical' ? 'bg-red-50' : 'bg-amber-50',
-                )}>
-                  <AlertTriangle size={14} className={
-                    alert.severity === 'critical' ? 'text-red-500' : 'text-amber-500'
-                  } />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-sm font-medium text-surface-800">{alert.title}</span>
-                    <SeverityBadge severity={alert.severity} />
-                  </div>
-                  <p className="text-xs text-surface-500 leading-relaxed">{alert.message}</p>
-                  <p className="text-xs text-surface-400 font-mono mt-1">
-                    {alert.sensorName} · {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
-                  </p>
                 </div>
               </div>
             ))}
           </div>
+
+          {/* Deployment cards */}
+          <div>
+            <h2 className="section-header mb-3">Your Deployments</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {custDeps.map(dep => {
+                const depSensors = dep.sensorIds.map(id => sensors[id])
+                const depWarn    = depSensors.filter(s => s.status === 'warning').length
+                const depOffline = depSensors.filter(s => s.status === 'offline').length
+                const depAlerts  = alerts.filter(a => a.deploymentId === dep.id && !a.resolved)
+                const firstSensor = depSensors.find(s => s.latestReading?.temperature != null)
+                return (
+                  <div
+                    key={dep.id}
+                    className="card p-5 cursor-pointer hover:border-brand-300 hover:shadow-card-md transition-all"
+                    onClick={() => navigate(`/deployments/${dep.id}`)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={clsx('w-2 h-10 rounded-full flex-shrink-0',
+                          dep.status === 'online' ? 'bg-brand-500' :
+                          dep.status === 'warning' ? 'bg-amber-400' :
+                          dep.status === 'critical' ? 'bg-red-500' : 'bg-surface-300'
+                        )} />
+                        <div>
+                          <h3 className="text-sm font-semibold text-surface-800">{dep.name}</h3>
+                          <div className="flex items-center gap-1.5 text-xs text-surface-400 mt-0.5">
+                            <MapPin size={10} />{dep.location.split('—')[1]?.trim() || dep.location}
+                          </div>
+                        </div>
+                      </div>
+                      <StatusBadge status={dep.status} />
+                    </div>
+                    {firstSensor && (
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex items-center gap-1.5 card-inner px-3 py-2 flex-1">
+                          <Thermometer size={13} className="text-brand-500" />
+                          <span className="text-sm font-mono font-semibold text-surface-800">{firstSensor.latestReading.temperature}°C</span>
+                          <span className="text-xs text-surface-400 ml-auto">temp</span>
+                        </div>
+                        {firstSensor.latestReading.humidity != null && (
+                          <div className="flex items-center gap-1.5 card-inner px-3 py-2 flex-1">
+                            <Droplets size={13} className="text-sky-500" />
+                            <span className="text-sm font-mono font-semibold text-surface-800">{firstSensor.latestReading.humidity}%</span>
+                            <span className="text-xs text-surface-400 ml-auto">humidity</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-surface-400">
+                      <span>{depSensors.length} sensor{depSensors.length !== 1 ? 's' : ''}</span>
+                      <div className="flex items-center gap-3">
+                        {depOffline > 0 && <span className="text-red-600">{depOffline} offline</span>}
+                        {depWarn > 0 && <span className="text-amber-600">{depWarn} warning</span>}
+                        {depAlerts.length > 0 && (
+                          <span className="badge bg-red-50 text-red-600 border border-red-200">
+                            {depAlerts.length} alert{depAlerts.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        <ChevronRight size={13} className="text-surface-300" />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Active alerts */}
+          {myAlerts.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="section-header">Active Alerts</h2>
+                <button className="text-xs text-brand-600 hover:text-brand-700 font-medium transition-colors" onClick={() => navigate('/alerts')}>
+                  View all →
+                </button>
+              </div>
+              <div className="card divide-y divide-surface-100">
+                {myAlerts.slice(0, 4).map(alert => (
+                  <div key={alert.id} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-50 transition-colors">
+                    <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5',
+                      alert.severity === 'critical' ? 'bg-red-50' : 'bg-amber-50'
+                    )}>
+                      <AlertTriangle size={14} className={alert.severity === 'critical' ? 'text-red-500' : 'text-amber-500'} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-medium text-surface-800">{alert.title}</span>
+                        <SeverityBadge severity={alert.severity} />
+                      </div>
+                      <p className="text-xs text-surface-500 leading-relaxed">{alert.message}</p>
+                      <p className="text-xs text-surface-400 font-mono mt-1">
+                        {alert.sensorName} · {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'config' && (
+        <div className="animate-fade-in">
+          <PharmaSiteManager customerId={pharmaCustomerId} />
         </div>
       )}
     </div>
   )
 }
 
+// ─── Cal Engineer view — deployment + device health focus ────────────────────
 // ─── Cal Engineer view — deployment + device health focus ────────────────────
 function CalEngineerOverview({ navigate }) {
   const counts     = getSensorStatusCounts()
